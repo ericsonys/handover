@@ -160,7 +160,7 @@ select { text-overflow: ellipsis; }
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="eyebrow">Engenharia Clínica · 19:00 – 07:00</div>
+      <div class="eyebrow">Engenharia Clínica</div>
       <h1>Passagem de Plantão</h1>
     </div>
     <button type="button" class="btn ghost" id="btnNew">Novo plantão</button>
@@ -175,8 +175,13 @@ select { text-overflow: ellipsis; }
   <div id="view-fill" class="stack" role="tabpanel" aria-labelledby="tab-fill">
     <section class="card fields">
       <div>
-        <label class="lbl" for="fData">Data do dia anterior</label>
+        <label class="lbl" for="fTurno">Horário do plantão</label>
+        <select id="fTurno"></select>
+      </div>
+      <div>
+        <label class="lbl" for="fData">Data do plantão</label>
         <input type="date" id="fData">
+        <p class="hint" id="dataHint" style="margin:6px 0 0"></p>
       </div>
       <div>
         <label class="lbl" for="fResp">Responsável pelo plantão</label>
@@ -310,6 +315,14 @@ select { text-overflow: ellipsis; }
     "UTI Z - PEDIATRIA"
   ];
 
+  var TURNOS = [
+    { id: 'd1', grupo: 'Diaristas', label: '07:00 - 13:00', r: '07:00 - 13:00', noite: false },
+    { id: 'd2', grupo: 'Diaristas', label: '13:00 - 19:00', r: '13:00 - 19:00', noite: false },
+    { id: 'p1', grupo: 'Plantonista', label: '07:00 - 19:00 (Dia)', r: '07:00 - 19:00', noite: false },
+    { id: 'p2', grupo: 'Plantonista', label: '19:00 - 07:00 (Noite)', r: '19:00 - 07:00', noite: true }
+  ];
+  function turnoOf(id) { for (var i = 0; i < TURNOS.length; i++) if (TURNOS[i].id === id) return TURNOS[i]; return TURNOS[3]; }
+
   var USGS = [
     { id: 'z60', nome: "Usg Z60 (Novo)" },
     { id: 'z6l', nome: "Usg Z6 (Com sonda Linear)" },
@@ -339,6 +352,14 @@ select { text-overflow: ellipsis; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function isoFrom(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function ontem() { var d = new Date(); d.setDate(d.getDate() - 1); return isoFrom(d); }
+  /* Noturno: data do dia em que começou (ontem, se a mensagem for feita de manhã). Demais turnos: hoje. */
+  function dataPara(id) {
+    if (turnoOf(id).noite) return new Date().getHours() >= 19 ? isoFrom(new Date()) : ontem();
+    return isoFrom(new Date());
+  }
+  function hintData(id) {
+    return turnoOf(id).noite ? 'Plantão noturno: data do dia em que ele começou (dia anterior à entrega).' : 'Plantão diurno: data do próprio dia.';
+  }
   function fmtDate(iso) { var p = (iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
   function up(s) { return String(s).toLocaleUpperCase('pt-BR'); }
   function forceUp(el) {
@@ -350,7 +371,7 @@ select { text-overflow: ellipsis; }
 
   function blankShift() {
     var usg = {}; USGS.forEach(function (u) { usg[u.id] = ''; });
-    return { data: ontem(), resp: 'ERICSON', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
+    return { turno: 'p2', data: dataPara('p2'), resp: 'ERICSON', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
   }
   function fixShift(o) {
     var b = blankShift();
@@ -391,7 +412,7 @@ select { text-overflow: ellipsis; }
   }
   function buildText(sh) {
     var L = [];
-    L.push('Passagem de Plantão – ' + fmtDate(sh.data) + ' [19:00 - 07:00]');
+    L.push('Passagem de Plantão – ' + fmtDate(sh.data) + ' [' + turnoOf(sh.turno).r + ']');
     L.push('Responsável pelo plantão: ' + up(sh.resp.trim()));
     L.push('');
     L.push('Responsável que assume o plantão: ' + up(sh.assume.trim()));
@@ -490,6 +511,12 @@ select { text-overflow: ellipsis; }
     $('dlSetores').innerHTML = SETORES.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
   }
   function renderAll() {
+    $('fTurno').innerHTML = ['Diaristas', 'Plantonista'].map(function (g) {
+      return '<optgroup label="' + g + '">' + TURNOS.filter(function (t) { return t.grupo === g; }).map(function (t) {
+        return '<option value="' + t.id + '">' + esc(t.label) + '</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+    $('fTurno').value = state.turno; $('dataHint').textContent = hintData(state.turno);
     $('fData').value = state.data; $('fResp').value = state.resp; $('fAssume').value = state.assume; $('fObs').value = state.obs;
     renderList('ocorr'); renderList('pend'); renderUsg(); growAll(); updateOutput();
   }
@@ -509,7 +536,7 @@ select { text-overflow: ellipsis; }
     if (!hasContent(state)) return false;
     var snap = JSON.parse(JSON.stringify(state));
     var rec = { id: uid(), data: snap.data, savedAt: Date.now(), shift: snap, text: buildText(snap) };
-    store.hist = store.hist.filter(function (h) { return h.data !== rec.data; });
+    store.hist = store.hist.filter(function (h) { return !(h.data === rec.data && h.shift.turno === snap.turno); });
     store.hist.unshift(rec);
     store.hist.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
     store.hist = store.hist.slice(0, HIST_MAX);
@@ -528,7 +555,7 @@ select { text-overflow: ellipsis; }
       var sh = h.shift, no = clean(sh, 'ocorr').length, np = clean(sh, 'pend').length;
       var open = openHist === h.id;
       return '<section class="card hist" data-hid="' + h.id + '">' +
-        '<div class="hist-h"><span class="hist-d">' + esc(fmtDate(h.data)) + '</span><span class="hist-m">' + no + ' ocorr. · ' + np + ' pend.</span></div>' +
+        '<div class="hist-h"><span class="hist-d">' + esc(fmtDate(h.data)) + ' · ' + esc(turnoOf(sh.turno).r) + '</span><span class="hist-m">' + no + ' ocorr. · ' + np + ' pend.</span></div>' +
         (open ? '<div class="chat hist-body"><div class="bubble">' + esc(h.text) + '</div></div>'
               : '<div class="hist-sum">' + esc(clean(sh, 'ocorr').slice(0, 2).map(function (i) { return i.t.split('\n')[0]; }).join(' · ') || 'Sem ocorrências registradas') + '</div>') +
         '<div class="hist-acts">' +
@@ -549,7 +576,7 @@ select { text-overflow: ellipsis; }
     else if (act === 'base') {
       archive();
       var nw = blankShift(), sh = h.shift;
-      nw.resp = sh.resp; nw.usg = JSON.parse(JSON.stringify(sh.usg));
+      nw.resp = sh.resp; nw.turno = sh.turno; nw.data = dataPara(sh.turno); nw.usg = JSON.parse(JSON.stringify(sh.usg));
       nw.pend = clean(sh, 'pend').map(function (i) { return { id: uid(), t: i.t, s: i.s }; });
       store.cur = state = nw; renderAll(); switchTab('fill');
       toast('Pendências e USGs trazidos do plantão anterior');
@@ -562,6 +589,11 @@ select { text-overflow: ellipsis; }
   });
 
   /* ---------- eventos do formulário ---------- */
+  $('fTurno').addEventListener('change', function (e) {
+    state.turno = e.target.value; state.data = dataPara(state.turno);
+    $('fData').value = state.data; $('dataHint').textContent = hintData(state.turno);
+    updateOutput();
+  });
   $('fData').addEventListener('input', function (e) { state.data = e.target.value; updateOutput(); });
   $('fResp').addEventListener('input', function (e) { state.resp = forceUp(e.target); updateOutput(); });
   $('fAssume').addEventListener('input', function (e) { state.assume = forceUp(e.target); updateOutput(); });
