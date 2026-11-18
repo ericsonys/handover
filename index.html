@@ -239,6 +239,7 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
           <div><label class="lbl" for="cfgUrl">Link do Web App</label><input type="text" id="cfgUrl" autocomplete="off" autocapitalize="off" spellcheck="false" style="text-transform:none"></div>
           <div><label class="lbl" for="cfgKey">Chave</label><input type="password" id="cfgKey" autocomplete="off" style="text-transform:none"></div>
           <button type="button" class="btn primary" id="btnCfg" style="flex:none">Salvar e sincronizar</button>
+          <button type="button" class="btn" id="btnLink" style="flex:none">Copiar link de acesso (para outros aparelhos)</button>
         </div>
       </details>
     </section>
@@ -691,8 +692,8 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
     ta.remove(); return ok;
   }
-  function copyText(text, after) {
-    var done = function () { toast('Mensagem copiada'); if (after) after(); };
+  function copyText(text, after, msg) {
+    var done = function () { toast(msg || 'Mensagem copiada'); if (after) after(); };
     var fail = function () { if (copyFallback(text)) done(); else toast('Não foi possível copiar'); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
   }
@@ -749,14 +750,36 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     }).then(function () { syncing = false; renderStatus(); if (!$('view-hist').hidden) renderHist(); });
   }
   $('btnSync').addEventListener('click', function () { sync(); });
-  $('btnCfg').addEventListener('click', function () {
-    var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
-    if (!/^https:\/\/script\.google\.com\//.test(url) || !key) { toast('Informe o link do Web App e a chave'); return; }
+  function applyCfg(url, key) {
     var first = !store.cfg.migrated || store.cfg.url !== url;
     store.cfg = { url: url, key: key, migrated: true };
     if (first) store.hist.forEach(function (h) { store.queue.push({ t: 'save', rec: h }); });
-    persist(); lastErr = ''; $('cfgBox').open = false; sync();
+    persist(); lastErr = '';
+    $('cfgUrl').value = url; $('cfgKey').value = key; $('cfgBox').open = false;
+    sync();
+  }
+  $('btnCfg').addEventListener('click', function () {
+    var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\//.test(url) || !key) { toast('Informe o link do Web App e a chave'); return; }
+    applyCfg(url, key);
   });
+  function b64u(str) { return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function unb64u(str) { str = str.replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; return atob(str); }
+  $('btnLink').addEventListener('click', function () {
+    if (!cfgOk()) { toast('Configure a sincronização primeiro'); return; }
+    var link = location.origin + location.pathname + '#cfg=' + b64u(JSON.stringify({ u: store.cfg.url, k: store.cfg.key }));
+    copyText(link, null, 'Link de acesso copiado');
+  });
+  /* Link de acesso: abre o app já configurado e limpa o endereço. */
+  (function () {
+    var h = location.hash || '';
+    if (h.indexOf('#cfg=') !== 0) return;
+    try {
+      var c = JSON.parse(unb64u(h.slice(5)));
+      if (c && /^https:\/\/script\.google\.com\//.test(c.u) && c.k) { applyCfg(c.u, c.k); toast('Sincronização configurada'); }
+    } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  })();
   $('cfgUrl').value = store.cfg.url || ''; $('cfgKey').value = store.cfg.key || '';
   window.addEventListener('online', sync);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) sync(); });
