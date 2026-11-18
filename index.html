@@ -390,8 +390,10 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
 
   function blankShift() {
     var usg = {}; USGS.forEach(function (u) { usg[u.id] = ''; });
-    return { turno: 'p2', data: dataPara('p2'), resp: 'ERICSON', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
+    return { sid: 'S' + Date.now().toString(36) + uid(), turno: 'p2', data: dataPara('p2'), resp: 'ERICSON', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
   }
+  /* Identificador do plantão: cada plantão tem o seu, então dois do mesmo dia e horário não se sobrescrevem. */
+  function keyOf(sh) { return sh.sid || (sh.data + '|' + sh.turno); }
   function fixShift(o) {
     var b = blankShift();
     Object.keys(b).forEach(function (k) { if (o[k] === undefined) o[k] = b[k]; });
@@ -557,8 +559,8 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
   function archive() {
     if (!hasContent(state)) return false;
     var snap = JSON.parse(JSON.stringify(state));
-    var rec = { id: uid(), data: snap.data, savedAt: Date.now(), shift: snap, text: buildText(snap) };
-    store.hist = store.hist.filter(function (h) { return !(h.data === rec.data && h.shift.turno === snap.turno); });
+    var rec = { id: keyOf(snap), data: snap.data, savedAt: Date.now(), shift: snap, text: buildText(snap) };
+    store.hist = store.hist.filter(function (h) { return keyOf(h.shift) !== rec.id; });
     store.hist.unshift(rec);
     store.hist.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
     store.hist = store.hist.slice(0, HIST_MAX);
@@ -607,7 +609,7 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     }
     else if (act === 'del') {
       if (armedDel !== id) { armedDel = id; clearTimeout(armedDelT); armedDelT = setTimeout(function () { armedDel = null; renderHist(); }, 3500); renderHist(); return; }
-      store.queue.push({ t: 'del', key: h.data + '|' + h.shift.turno });
+      store.queue.push({ t: 'del', key: keyOf(h.shift) });
       store.hist = store.hist.filter(function (x) { return x.id !== id; });
       armedDel = null; setTimeout(sync, 0); persist(); renderHist(); toast('Plantão excluído');
     }
@@ -742,12 +744,22 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
         .then(function () { store.queue.shift(); persist(); return flush(); });
     }
     return flush().then(function () { return api({ action: 'list' }); }).then(function (j) {
-      store.hist = j.hist.map(function (h) { h.shift = fixShift(h.shift); return h; });
+      /* Mantém o que ainda não subiu (salvos ou excluídos durante a sincronização). */
+      var pendDel = {}, pendSave = {};
+      store.queue.forEach(function (op) { if (op.t === 'del') pendDel[op.key] = 1; else pendSave[keyOf(op.rec.shift)] = op.rec; });
+      var lista = j.hist.map(function (h) { h.shift = fixShift(h.shift); h.id = keyOf(h.shift); return h; })
+        .filter(function (h) { return !pendDel[h.id] && !pendSave[h.id]; });
+      Object.keys(pendSave).forEach(function (k) { lista.push(pendSave[k]); });
+      lista.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
+      store.hist = lista.slice(0, HIST_MAX);
       store.sug = { ocorr: (j.sug && j.sug.ocorr) || [], pend: (j.sug && j.sug.pend) || [] };
       lastSync = Date.now(); lastErr = ''; persist();
     }).catch(function (e) {
       lastErr = e && e.name === 'AbortError' ? 'sem resposta' : (e && e.message === 'Failed to fetch' ? 'sem internet' : (e && e.message) || 'falha');
-    }).then(function () { syncing = false; renderStatus(); if (!$('view-hist').hidden) renderHist(); });
+    }).then(function () {
+      syncing = false; renderStatus(); if (!$('view-hist').hidden) renderHist();
+      if (store.queue.length && !lastErr) setTimeout(sync, 50);
+    });
   }
   $('btnSync').addEventListener('click', function () { sync(); });
   function applyCfg(url, key) {
