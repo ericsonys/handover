@@ -104,7 +104,7 @@ select { text-overflow: ellipsis; }
 
 .sug {
   position: fixed; z-index: 12; background: var(--surface); border: 1px solid var(--accent);
-  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); overflow-y: auto; max-height: 220px;
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); overflow-y: auto; max-height: 220px; touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 .sug button {
   display: block; width: 100%; text-align: left; appearance: none; background: none; border: 0;
@@ -461,7 +461,7 @@ select { text-overflow: ellipsis; }
       if (nq && k.indexOf(nq) === -1) return;
       seen[k] = 1; out.push(t);
     });
-    return out.slice(0, 6);
+    return out.slice(0, 8);
   }
   var sugEl = $('sug'), sugTa = null, sugList = null;
   function hideSug() { sugEl.hidden = true; sugTa = null; }
@@ -477,8 +477,9 @@ select { text-overflow: ellipsis; }
     if (below >= h || below >= r.top) { sugEl.style.top = (r.bottom + 4) + 'px'; sugEl.style.bottom = 'auto'; sugEl.style.maxHeight = Math.max(120, Math.min(220, below)) + 'px'; }
     else { sugEl.style.bottom = (window.innerHeight - r.top + 4) + 'px'; sugEl.style.top = 'auto'; sugEl.style.maxHeight = Math.max(120, Math.min(220, r.top - 12)) + 'px'; }
   }
-  sugEl.addEventListener('pointerdown', function (e) {
-    e.preventDefault();
+  /* Seleciona no clique (não no toque inicial), para a lista poder rolar com o dedo. */
+  sugEl.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  sugEl.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b || !sugTa) return;
     var ta = sugTa, list = sugList;
     ta.value = up(b.textContent);
