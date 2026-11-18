@@ -49,7 +49,7 @@ body {
 }
 .wrap { max-width: 640px; margin: 0 auto; }
 .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-block: 18px 12px; }
-.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { min-width: 0; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 h1 { margin: 2px 0 0; font-size: 22px; line-height: 1.15; font-weight: 650; text-wrap: balance; }
 h2 { margin: 0; font-size: 15px; font-weight: 600; text-wrap: balance; }
 
@@ -74,23 +74,26 @@ input[type="date"], input[type="text"], select, textarea {
   border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   font: 16px/1.4 var(--font-body); min-height: 44px;
 }
-textarea { resize: none; overflow: hidden; display: block; }
+input[type="text"], textarea { text-transform: uppercase; }
+textarea { resize: none; overflow: hidden; display: block; max-width: 100%; }
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; }
+select { text-overflow: ellipsis; }
 :is(input, select, textarea, button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.fields { display: grid; gap: 12px; }
+.fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 1px 9px; }
 .hint { margin: 2px 0 8px; font-size: 13px; color: var(--muted); }
-.usg { display: grid; gap: 12px; }
-.usg-row { display: grid; gap: 6px; }
+.usg { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.usg-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .usg-name { font-weight: 600; font-size: 14px; }
 
 .items { list-style: none; margin: 0; padding: 0; }
-.item { display: grid; gap: 8px; padding-block: 10px; border-top: 1px solid var(--line); }
+.item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding-block: 10px; border-top: 1px solid var(--line); }
 .item:first-child { border-top: 0; }
 .item-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.item-actions select { width: auto; flex: 1; max-width: 70%; min-height: 38px; padding: 6px 10px; font-size: 14px; }
+.item-actions select { width: auto; min-width: 0; flex: 1 1 0; text-overflow: ellipsis; min-height: 38px; padding: 6px 10px; font-size: 14px; }
 .mini {
-  appearance: none; background: transparent; color: var(--muted); border: 1px solid transparent;
+  flex: none; appearance: none; background: transparent; color: var(--muted); border: 1px solid transparent;
   border-radius: 8px; font: 500 13px var(--font-body); padding: 8px 12px; min-height: 38px; cursor: pointer;
 }
 .add {
@@ -117,7 +120,7 @@ textarea { resize: none; overflow: hidden; display: block; }
   font: 600 15px var(--font-body); min-height: 48px; padding: 0 18px; text-decoration: none; cursor: pointer;
 }
 .btn.primary { flex: 1; background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-.btn.ghost { min-height: 38px; padding: 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.btn.ghost { min-height: 38px; padding: 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; flex: none; }
 .btn.ghost.armed, .btn.small.armed { color: var(--danger); border-color: var(--danger); }
 .btn.small { min-height: 40px; padding: 0 14px; font-size: 14px; font-weight: 500; }
 
@@ -128,7 +131,7 @@ textarea { resize: none; overflow: hidden; display: block; }
 }
 .stats { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 
-.hist { display: grid; gap: 10px; }
+.hist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .hist-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .hist-d { font-weight: 600; font-variant-numeric: tabular-nums; }
 .hist-m { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
@@ -177,11 +180,11 @@ textarea { resize: none; overflow: hidden; display: block; }
       </div>
       <div>
         <label class="lbl" for="fResp">Responsável pelo plantão</label>
-        <input type="text" id="fResp" autocomplete="off">
+        <input type="text" id="fResp" autocomplete="off" autocapitalize="characters">
       </div>
       <div>
         <label class="lbl" for="fAssume">Responsável que assume o plantão</label>
-        <input type="text" id="fAssume" autocomplete="off">
+        <input type="text" id="fAssume" autocomplete="off" autocapitalize="characters">
       </div>
     </section>
 
@@ -337,11 +340,17 @@ textarea { resize: none; overflow: hidden; display: block; }
   function isoFrom(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function ontem() { var d = new Date(); d.setDate(d.getDate() - 1); return isoFrom(d); }
   function fmtDate(iso) { var p = (iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function up(s) { return String(s).toLocaleUpperCase('pt-BR'); }
+  function forceUp(el) {
+    var v = up(el.value);
+    if (v !== el.value) { var a = el.selectionStart, b = el.selectionEnd; el.value = v; try { el.setSelectionRange(a, b); } catch (e) {} }
+    return el.value;
+  }
   function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
   function blankShift() {
     var usg = {}; USGS.forEach(function (u) { usg[u.id] = ''; });
-    return { data: ontem(), resp: 'Ericson', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
+    return { data: ontem(), resp: 'ERICSON', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
   }
   function fixShift(o) {
     var b = blankShift();
@@ -368,7 +377,7 @@ textarea { resize: none; overflow: hidden; display: block; }
   var $ = function (id) { return document.getElementById(id); };
 
   function clean(sh, list) {
-    return sh[list].map(function (i) { return { t: i.t.trim(), s: i.s }; }).filter(function (i) { return i.t; });
+    return sh[list].map(function (i) { return { t: up(i.t.trim()), s: up(i.s) }; }).filter(function (i) { return i.t; });
   }
   function bulletLines(sh, list) {
     var out = [], items = clean(sh, list);
@@ -383,9 +392,9 @@ textarea { resize: none; overflow: hidden; display: block; }
   function buildText(sh) {
     var L = [];
     L.push('Passagem de Plantão – ' + fmtDate(sh.data) + ' [19:00 - 07:00]');
-    L.push('Responsável pelo plantão: ' + sh.resp.trim());
+    L.push('Responsável pelo plantão: ' + up(sh.resp.trim()));
     L.push('');
-    L.push('Responsável que assume o plantão: ' + sh.assume.trim());
+    L.push('Responsável que assume o plantão: ' + up(sh.assume.trim()));
     L.push('');
     L.push('✅ Ocorrências do plantão anterior:');
     L.push('');
@@ -393,14 +402,14 @@ textarea { resize: none; overflow: hidden; display: block; }
     L.push(''); L.push('');
     L.push("Localização dos USG's");
     L.push('');
-    USGS.forEach(function (u) { L.push(u.nome + ' - ' + (sh.usg[u.id] || '').trim()); });
+    USGS.forEach(function (u) { L.push(u.nome + ' - ' + up((sh.usg[u.id] || '').trim())); });
     L.push(''); L.push(''); L.push('');
     L.push('🧾 Pendências a serem resolvidas:');
     L.push('');
     L = L.concat(bulletLines(sh, 'pend'));
     L.push(''); L.push(''); L.push('');
     L.push('📌 Observações importantes:');
-    if (sh.obs.trim()) L.push(sh.obs.trim());
+    if (sh.obs.trim()) L.push(up(sh.obs.trim()));
     return L.join('\n');
   }
   function hasContent(sh) {
@@ -412,7 +421,7 @@ textarea { resize: none; overflow: hidden; display: block; }
   function learn(sh) {
     ['ocorr', 'pend'].forEach(function (list) {
       clean(sh, list).forEach(function (i) {
-        var t = i.t.split('\n')[0].trim();
+        var t = up(i.t.split('\n')[0].trim());
         if (t.length < 3 || t.length > 140) return;
         var arr = store.sug[list], k = norm(t), f = null;
         for (var x = 0; x < arr.length; x++) if (norm(arr[x].t) === k) { f = arr[x]; break; }
@@ -439,7 +448,7 @@ textarea { resize: none; overflow: hidden; display: block; }
     var items = suggestionsFor(list, ta.value);
     if (!items.length) { hideSug(); return; }
     sugTa = ta; sugList = list;
-    sugEl.innerHTML = '<small>Sugestões</small>' + items.map(function (t) { return '<button type="button">' + esc(t) + '</button>'; }).join('');
+    sugEl.innerHTML = '<small>Sugestões</small>' + items.map(function (t) { return '<button type="button">' + esc(up(t)) + '</button>'; }).join('');
     sugEl.hidden = false;
     var r = ta.getBoundingClientRect(), h = Math.min(sugEl.offsetHeight, 220);
     var below = window.innerHeight - r.bottom - 90;
@@ -451,7 +460,7 @@ textarea { resize: none; overflow: hidden; display: block; }
     e.preventDefault();
     var b = e.target.closest('button'); if (!b || !sugTa) return;
     var ta = sugTa, list = sugList;
-    ta.value = b.textContent;
+    ta.value = up(b.textContent);
     var f = findItem(list, ta.closest('.item').dataset.id);
     if (f) f.it.t = ta.value;
     grow(ta); hideSug(); updateOutput(); ta.focus();
@@ -554,12 +563,12 @@ textarea { resize: none; overflow: hidden; display: block; }
 
   /* ---------- eventos do formulário ---------- */
   $('fData').addEventListener('input', function (e) { state.data = e.target.value; updateOutput(); });
-  $('fResp').addEventListener('input', function (e) { state.resp = e.target.value; updateOutput(); });
-  $('fAssume').addEventListener('input', function (e) { state.assume = e.target.value; updateOutput(); });
-  $('fObs').addEventListener('input', function (e) { state.obs = e.target.value; grow(e.target); updateOutput(); });
+  $('fResp').addEventListener('input', function (e) { state.resp = forceUp(e.target); updateOutput(); });
+  $('fAssume').addEventListener('input', function (e) { state.assume = forceUp(e.target); updateOutput(); });
+  $('fObs').addEventListener('input', function (e) { state.obs = forceUp(e.target); grow(e.target); updateOutput(); });
   $('usgBox').addEventListener('input', function (e) {
     var id = e.target.dataset.usg; if (!id) return;
-    state.usg[id] = e.target.value; updateOutput();
+    state.usg[id] = forceUp(e.target); updateOutput();
   });
 
   function findItem(list, id) {
@@ -572,7 +581,7 @@ textarea { resize: none; overflow: hidden; display: block; }
     ul.addEventListener('input', function (e) {
       var ta = e.target.closest('textarea'); if (!ta) return;
       var f = findItem(list, ta.closest('.item').dataset.id);
-      if (f) f.it.t = ta.value;
+      if (f) f.it.t = forceUp(ta);
       grow(ta); updateOutput(); showSug(ta, list);
     });
     ul.addEventListener('focusin', function (e) {
@@ -637,7 +646,7 @@ textarea { resize: none; overflow: hidden; display: block; }
   var armed = false, armT, btnNew = $('btnNew');
   function disarm() { armed = false; clearTimeout(armT); btnNew.textContent = 'Novo plantão'; btnNew.classList.remove('armed'); }
   btnNew.addEventListener('click', function () {
-    if (!armed) { armed = true; btnNew.textContent = 'Toque de novo para limpar'; btnNew.classList.add('armed'); armT = setTimeout(disarm, 3500); return; }
+    if (!armed) { armed = true; btnNew.textContent = 'Confirmar?'; btnNew.classList.add('armed'); armT = setTimeout(disarm, 3500); return; }
     disarm();
     var saved = archive();
     store.cur = state = blankShift(); renderAll(); switchTab('fill');
