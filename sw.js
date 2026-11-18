@@ -1,5 +1,5 @@
 /* Cache simples para uso offline. Aumente a versão ao publicar mudanças. */
-var CACHE = 'plantao-ec-v8';
+var CACHE = 'plantao-ec-v9';
 var FILES = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
