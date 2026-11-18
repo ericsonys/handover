@@ -409,13 +409,14 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
       o.sug = o.sug || { ocorr: [], pend: [] };
       o.sug.ocorr = o.sug.ocorr || []; o.sug.pend = o.sug.pend || [];
       o.queue = Array.isArray(o.queue) ? o.queue : [];
+      o.tomb = o.tomb || {};
       o.cfg = o.cfg || { url: DEFAULT_URL, key: '' };
       return o;
     } catch (e) { return null; }
   }
   function persist() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
 
-  var store = load() || { cur: blankShift(), hist: [], sug: { ocorr: [], pend: [] }, queue: [], cfg: { url: DEFAULT_URL, key: '' } };
+  var store = load() || { cur: blankShift(), hist: [], sug: { ocorr: [], pend: [] }, queue: [], tomb: {}, cfg: { url: DEFAULT_URL, key: '' } };
   var state = store.cur;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -566,6 +567,7 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     store.hist = store.hist.slice(0, HIST_MAX);
     learn(snap);
     store.queue.push({ t: 'save', rec: rec });
+    delete store.tomb[rec.id];
     persist();
     setTimeout(sync, 0);
     return true;
@@ -609,7 +611,8 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     }
     else if (act === 'del') {
       if (armedDel !== id) { armedDel = id; clearTimeout(armedDelT); armedDelT = setTimeout(function () { armedDel = null; renderHist(); }, 3500); renderHist(); return; }
-      store.queue.push({ t: 'del', key: keyOf(h.shift) });
+      store.queue.push({ t: 'del', key: keyOf(h.shift), alt: h.data + '|' + h.shift.turno });
+      store.tomb[keyOf(h.shift)] = { tries: 0 };
       store.hist = store.hist.filter(function (x) { return x.id !== id; });
       armedDel = null; setTimeout(sync, 0); persist(); renderHist(); toast('Plantão excluído');
     }
@@ -740,7 +743,7 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
     function flush() {
       if (!store.queue.length) return Promise.resolve();
       var op = store.queue[0];
-      return api(op.t === 'save' ? { action: 'save', rec: op.rec } : { action: 'del', chave: op.key })
+      return api(op.t === 'save' ? { action: 'save', rec: op.rec } : { action: 'del', chave: op.key, alt: op.alt })
         .then(function () { store.queue.shift(); persist(); return flush(); });
     }
     return flush().then(function () { return api({ action: 'list' }); }).then(function (j) {
@@ -749,6 +752,16 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
       store.queue.forEach(function (op) { if (op.t === 'del') pendDel[op.key] = 1; else pendSave[keyOf(op.rec.shift)] = op.rec; });
       var lista = j.hist.map(function (h) { h.shift = fixShift(h.shift); h.id = keyOf(h.shift); return h; })
         .filter(function (h) { return !pendDel[h.id] && !pendSave[h.id]; });
+      /* Excluídos: continuam ocultos; se a planilha ainda os devolve, repete a exclusão (até 3 vezes). */
+      var noServidor = {};
+      lista.forEach(function (h) { noServidor[h.id] = 1; });
+      Object.keys(store.tomb).forEach(function (k) {
+        if (pendDel[k]) return;
+        if (!noServidor[k]) { delete store.tomb[k]; return; }
+        var tries = store.tomb[k].tries || 0;
+        if (tries < 3) { store.tomb[k].tries = tries + 1; store.queue.push({ t: 'del', key: k }); }
+      });
+      lista = lista.filter(function (h) { return !store.tomb[h.id]; });
       Object.keys(pendSave).forEach(function (k) { lista.push(pendSave[k]); });
       lista.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
       store.hist = lista.slice(0, HIST_MAX);
@@ -761,7 +774,10 @@ details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; m
       if (store.queue.length && !lastErr) setTimeout(sync, 50);
     });
   }
-  $('btnSync').addEventListener('click', function () { sync(); });
+  $('btnSync').addEventListener('click', function () {
+    Object.keys(store.tomb).forEach(function (k) { store.tomb[k].tries = 0; });
+    sync();
+  });
   function applyCfg(url, key) {
     var first = !store.cfg.migrated || store.cfg.url !== url;
     store.cfg = { url: url, key: key, migrated: true };
