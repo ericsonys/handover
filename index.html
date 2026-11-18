@@ -153,6 +153,10 @@ select { text-overflow: ellipsis; }
   z-index: 13; background: var(--fg); color: var(--bg); border-radius: 999px; padding: 10px 18px;
   font-size: 14px; font-weight: 500; max-width: calc(100% - 32px);
 }
+details.cfg { margin-top: 10px; }
+details.cfg summary { cursor: pointer; color: var(--accent); font-weight: 500; min-height: 32px; }
+.sync-ok { color: var(--accent); }
+.sync-err { color: var(--danger); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -226,6 +230,18 @@ select { text-overflow: ellipsis; }
   </div>
 
   <div id="view-hist" class="stack" role="tabpanel" aria-labelledby="tab-hist" hidden>
+    <section class="card">
+      <div class="sec-h"><h2>Sincronização</h2><button type="button" class="btn small" id="btnSync">Sincronizar</button></div>
+      <p class="hint" id="syncStatus" style="margin-bottom:0"></p>
+      <details class="cfg" id="cfgBox">
+        <summary>Configurar</summary>
+        <div class="fields" style="margin-top:10px">
+          <div><label class="lbl" for="cfgUrl">Link do Web App</label><input type="text" id="cfgUrl" autocomplete="off" autocapitalize="off" spellcheck="false" style="text-transform:none"></div>
+          <div><label class="lbl" for="cfgKey">Chave</label><input type="password" id="cfgKey" autocomplete="off" style="text-transform:none"></div>
+          <button type="button" class="btn primary" id="btnCfg" style="flex:none">Salvar e sincronizar</button>
+        </div>
+      </details>
+    </section>
     <div id="histList" class="stack" style="padding:0"></div>
   </div>
 </div>
@@ -243,6 +259,8 @@ select { text-overflow: ellipsis; }
 (function () {
   var KEY = 'passagem-plantao-ec-v3';
   var HIST_MAX = 90;
+  /* Link do Web App (Apps Script). Pode ficar vazio: cada aparelho também aceita o link na tela Histórico. */
+  var DEFAULT_URL = '';
 
   /* Lista de setores (planilha Setores.xlsx). */
   var SETORES = [
@@ -387,12 +405,14 @@ select { text-overflow: ellipsis; }
       o.hist = Array.isArray(o.hist) ? o.hist : [];
       o.sug = o.sug || { ocorr: [], pend: [] };
       o.sug.ocorr = o.sug.ocorr || []; o.sug.pend = o.sug.pend || [];
+      o.queue = Array.isArray(o.queue) ? o.queue : [];
+      o.cfg = o.cfg || { url: DEFAULT_URL, key: '' };
       return o;
     } catch (e) { return null; }
   }
   function persist() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
 
-  var store = load() || { cur: blankShift(), hist: [], sug: { ocorr: [], pend: [] } };
+  var store = load() || { cur: blankShift(), hist: [], sug: { ocorr: [], pend: [] }, queue: [], cfg: { url: DEFAULT_URL, key: '' } };
   var state = store.cur;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -542,7 +562,9 @@ select { text-overflow: ellipsis; }
     store.hist.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
     store.hist = store.hist.slice(0, HIST_MAX);
     learn(snap);
+    store.queue.push({ t: 'save', rec: rec });
     persist();
+    setTimeout(sync, 0);
     return true;
   }
   var openHist = null, armedDel = null, armedDelT;
@@ -584,8 +606,9 @@ select { text-overflow: ellipsis; }
     }
     else if (act === 'del') {
       if (armedDel !== id) { armedDel = id; clearTimeout(armedDelT); armedDelT = setTimeout(function () { armedDel = null; renderHist(); }, 3500); renderHist(); return; }
+      store.queue.push({ t: 'del', key: h.data + '|' + h.shift.turno });
       store.hist = store.hist.filter(function (x) { return x.id !== id; });
-      armedDel = null; persist(); renderHist(); toast('Plantão excluído');
+      armedDel = null; setTimeout(sync, 0); persist(); renderHist(); toast('Plantão excluído');
     }
   });
 
@@ -652,7 +675,7 @@ select { text-overflow: ellipsis; }
     });
     window.scrollTo(0, 0);
     if (name === 'fill') growAll();
-    if (name === 'hist') renderHist();
+    if (name === 'hist') { renderHist(); renderStatus(); sync(); }
   }
   document.querySelectorAll('.tab').forEach(function (b) { b.addEventListener('click', function () { switchTab(b.dataset.tab); }); });
 
@@ -686,10 +709,64 @@ select { text-overflow: ellipsis; }
     toast(saved ? 'Plantão salvo no histórico' : 'Plantão em branco');
   });
 
+
+  /* ---------- sincronização com a planilha (Apps Script) ---------- */
+  var syncing = false, lastSync = 0, lastErr = '';
+  function cfgOk() { return !!(store.cfg && store.cfg.url && store.cfg.key); }
+  function api(body) {
+    var ctl = new AbortController(), to = setTimeout(function () { ctl.abort(); }, 25000);
+    return fetch(store.cfg.url, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ key: store.cfg.key }, body)), signal: ctl.signal
+    }).then(function (r) { clearTimeout(to); return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.erro || 'erro'); return j; });
+  }
+  function renderStatus() {
+    var el = $('syncStatus'); if (!el) return;
+    var pend = store.queue.length ? ' · ' + store.queue.length + ' pendente(s)' : '';
+    el.className = 'hint';
+    if (!cfgOk()) el.textContent = 'Desligada. Toque em Configurar para compartilhar o histórico entre aparelhos.';
+    else if (syncing) el.textContent = 'Sincronizando…';
+    else if (lastErr) { el.className = 'hint sync-err'; el.textContent = 'Sem sincronizar (' + lastErr + ')' + pend; }
+    else if (lastSync) { el.className = 'hint sync-ok'; var d = new Date(lastSync); el.textContent = 'Sincronizado às ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + pend; }
+    else el.textContent = 'Pronta para sincronizar' + pend;
+  }
+  function sync() {
+    if (syncing || !cfgOk()) { renderStatus(); return Promise.resolve(); }
+    syncing = true; renderStatus();
+    function flush() {
+      if (!store.queue.length) return Promise.resolve();
+      var op = store.queue[0];
+      return api(op.t === 'save' ? { action: 'save', rec: op.rec } : { action: 'del', chave: op.key })
+        .then(function () { store.queue.shift(); persist(); return flush(); });
+    }
+    return flush().then(function () { return api({ action: 'list' }); }).then(function (j) {
+      store.hist = j.hist.map(function (h) { h.shift = fixShift(h.shift); return h; });
+      store.sug = { ocorr: (j.sug && j.sug.ocorr) || [], pend: (j.sug && j.sug.pend) || [] };
+      lastSync = Date.now(); lastErr = ''; persist();
+    }).catch(function (e) {
+      lastErr = e && e.name === 'AbortError' ? 'sem resposta' : (e && e.message === 'Failed to fetch' ? 'sem internet' : (e && e.message) || 'falha');
+    }).then(function () { syncing = false; renderStatus(); if (!$('view-hist').hidden) renderHist(); });
+  }
+  $('btnSync').addEventListener('click', function () { sync(); });
+  $('btnCfg').addEventListener('click', function () {
+    var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\//.test(url) || !key) { toast('Informe o link do Web App e a chave'); return; }
+    var first = !store.cfg.migrated || store.cfg.url !== url;
+    store.cfg = { url: url, key: key, migrated: true };
+    if (first) store.hist.forEach(function (h) { store.queue.push({ t: 'save', rec: h }); });
+    persist(); lastErr = ''; $('cfgBox').open = false; sync();
+  });
+  $('cfgUrl').value = store.cfg.url || ''; $('cfgKey').value = store.cfg.key || '';
+  window.addEventListener('online', sync);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) sync(); });
+
   if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) {} }
   if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
 
   renderAll();
+  renderStatus();
+  sync();
 })();
 </script>
 </body>
