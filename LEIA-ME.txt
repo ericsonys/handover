@@ -1,0 +1,13 @@
+PASSAGEM DE PLANTÃO (PWA) - publicar no GitHub Pages
+
+1. No GitHub, crie um repositório (ex.: plantao-ec).
+2. Envie TODOS os arquivos desta pasta para a raiz do repositório
+   (index.html, manifest.json, sw.js e a pasta icons).
+3. Settings > Pages > Source: "Deploy from a branch" > Branch: main, pasta /(root) > Save.
+4. Em 1 a 2 minutos o link fica: https://SEU-USUARIO.github.io/plantao-ec/
+5. No celular, abra o link e use "Adicionar à tela inicial" (Android: Instalar app).
+
+Atualizações: ao mudar o index.html, aumente a versão em sw.js (CACHE = 'plantao-ec-v2')
+para o celular baixar a nova versão.
+
+Os dados (histórico e sugestões) ficam salvos no aparelho.

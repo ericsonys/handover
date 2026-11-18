@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Passagem de Plantão</title>
+<meta name="theme-color" content="#0B6E78">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plantão EC">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+/* Layout: coluna única para celular. Abas Preencher / Mensagem / Histórico, barra fixa embaixo com Copiar e WhatsApp. */
+:root {
+  --bg: #F1F5F5;
+  --surface: #FFFFFF;
+  --surface-2: #E4ECEC;
+  --line: #D3DEDE;
+  --fg: #102226;
+  --muted: #4E6569;
+  --accent: #0B6E78;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #D6EDEF;
+  --danger: #B42318;
+  --bubble: #D9FDD3;
+  --bubble-fg: #111B21;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0B1618; --surface: #132124; --surface-2: #1A2C30; --line: #26383C;
+    --fg: #E3EDEE; --muted: #93AAAE; --accent: #4DB8C4; --accent-fg: #06262A;
+    --accent-soft: #16373C; --danger: #FF8F84; --bubble: #005C4B; --bubble-fg: #E9EDEF;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); background: var(--bg); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-block: 0 130px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 640px; margin: 0 auto; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-block: 18px 12px; }
+.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 2px 0 0; font-size: 22px; line-height: 1.15; font-weight: 650; text-wrap: balance; }
+h2 { margin: 0; font-size: 15px; font-weight: 600; text-wrap: balance; }
+
+.tabs {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  background: var(--bg); display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line);
+}
+.tab {
+  appearance: none; background: none; border: 0; border-bottom: 3px solid transparent;
+  color: var(--muted); font: 500 14px var(--font-body); padding: 12px 6px 10px; min-height: 44px; cursor: pointer;
+}
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+.stack { display: flex; flex-direction: column; gap: 12px; padding-block: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+label.lbl {
+  display: block; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+}
+input[type="date"], input[type="text"], select, textarea {
+  width: 100%; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  font: 16px/1.4 var(--font-body); min-height: 44px;
+}
+textarea { resize: none; overflow: hidden; display: block; }
+:is(input, select, textarea, button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fields { display: grid; gap: 12px; }
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 1px 9px; }
+.hint { margin: 2px 0 8px; font-size: 13px; color: var(--muted); }
+.usg { display: grid; gap: 12px; }
+.usg-row { display: grid; gap: 6px; }
+.usg-name { font-weight: 600; font-size: 14px; }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.item { display: grid; gap: 8px; padding-block: 10px; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; }
+.item-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.item-actions select { width: auto; flex: 1; max-width: 70%; min-height: 38px; padding: 6px 10px; font-size: 14px; }
+.mini {
+  appearance: none; background: transparent; color: var(--muted); border: 1px solid transparent;
+  border-radius: 8px; font: 500 13px var(--font-body); padding: 8px 12px; min-height: 38px; cursor: pointer;
+}
+.add {
+  appearance: none; width: 100%; background: transparent; color: var(--accent);
+  border: 1px dashed var(--accent); border-radius: 8px; font: 500 14px var(--font-body);
+  min-height: 44px; cursor: pointer; margin-top: 4px;
+}
+
+.sug {
+  position: fixed; z-index: 12; background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); overflow-y: auto; max-height: 220px;
+}
+.sug button {
+  display: block; width: 100%; text-align: left; appearance: none; background: none; border: 0;
+  border-top: 1px solid var(--line); color: var(--fg); font: 15px/1.35 var(--font-body);
+  padding: 11px 12px; min-height: 44px; cursor: pointer;
+}
+.sug button:first-child { border-top: 0; }
+.sug small { display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 12px 0; }
+
+.btn {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  font: 600 15px var(--font-body); min-height: 48px; padding: 0 18px; text-decoration: none; cursor: pointer;
+}
+.btn.primary { flex: 1; background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.ghost { min-height: 38px; padding: 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.btn.ghost.armed, .btn.small.armed { color: var(--danger); border-color: var(--danger); }
+.btn.small { min-height: 40px; padding: 0 14px; font-size: 14px; font-weight: 500; }
+
+.chat { background: var(--surface-2); border-radius: 10px; padding: 14px; }
+.bubble {
+  background: var(--bubble); color: var(--bubble-fg); border-radius: 12px 12px 2px 12px;
+  padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.5;
+}
+.stats { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.hist { display: grid; gap: 10px; }
+.hist-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.hist-d { font-weight: 600; font-variant-numeric: tabular-nums; }
+.hist-m { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.hist-sum { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.hist-body { margin-top: 2px; }
+.hist-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; }
+
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--surface);
+  border-top: 1px solid var(--line); padding-top: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.bar-in { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 13; background: var(--fg); color: var(--bg); border-radius: 999px; padding: 10px 18px;
+  font-size: 14px; font-weight: 500; max-width: calc(100% - 32px);
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="eyebrow">Engenharia Clínica · 19:00 – 07:00</div>
+      <h1>Passagem de Plantão</h1>
+    </div>
+    <button type="button" class="btn ghost" id="btnNew">Novo plantão</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab" role="tab" id="tab-fill" data-tab="fill" aria-selected="true">Preencher</button>
+    <button type="button" class="tab" role="tab" id="tab-msg" data-tab="msg" aria-selected="false">Mensagem</button>
+    <button type="button" class="tab" role="tab" id="tab-hist" data-tab="hist" aria-selected="false">Histórico</button>
+  </div>
+
+  <div id="view-fill" class="stack" role="tabpanel" aria-labelledby="tab-fill">
+    <section class="card fields">
+      <div>
+        <label class="lbl" for="fData">Data do dia anterior</label>
+        <input type="date" id="fData">
+      </div>
+      <div>
+        <label class="lbl" for="fResp">Responsável pelo plantão</label>
+        <input type="text" id="fResp" autocomplete="off">
+      </div>
+      <div>
+        <label class="lbl" for="fAssume">Responsável que assume o plantão</label>
+        <input type="text" id="fAssume" autocomplete="off">
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="sec-h"><h2>✅ Ocorrências do plantão anterior</h2><span class="count" data-count="ocorr">0</span></div>
+      <p class="hint">Ao digitar, aparecem sugestões de itens já usados.</p>
+      <ul class="items" id="list-ocorr"></ul>
+      <button type="button" class="add" data-add="ocorr">+ Adicionar item</button>
+    </section>
+
+    <section class="card">
+      <h2>Localização dos USG's</h2>
+      <p class="hint">Escolha um setor da lista ou digite o local.</p>
+      <div class="usg" id="usgBox"></div>
+      <datalist id="dlSetores"></datalist>
+    </section>
+
+    <section class="card">
+      <div class="sec-h"><h2>🧾 Pendências a serem resolvidas</h2><span class="count" data-count="pend">0</span></div>
+      <p class="hint">Cada item vira uma linha com "*".</p>
+      <ul class="items" id="list-pend"></ul>
+      <button type="button" class="add" data-add="pend">+ Adicionar item</button>
+    </section>
+
+    <section class="card">
+      <label class="lbl" for="fObs">📌 Observações importantes</label>
+      <textarea id="fObs" rows="3" placeholder="Texto livre"></textarea>
+    </section>
+  </div>
+
+  <div id="view-msg" class="stack" role="tabpanel" aria-labelledby="tab-msg" hidden>
+    <div class="chat"><div class="bubble" id="bubble"></div></div>
+    <div class="stats"><span id="statItems"></span><span id="statChars"></span></div>
+  </div>
+
+  <div id="view-hist" class="stack" role="tabpanel" aria-labelledby="tab-hist" hidden>
+    <div id="histList" class="stack" style="padding:0"></div>
+  </div>
+</div>
+
+<div class="sug" id="sug" hidden></div>
+<div class="bar">
+  <div class="bar-in">
+    <button type="button" class="btn primary" id="btnCopy">Copiar mensagem</button>
+    <a class="btn" id="btnWa" href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  var KEY = 'passagem-plantao-ec-v3';
+  var HIST_MAX = 90;
+
+  /* Lista de setores (planilha Setores.xlsx). */
+  var SETORES = [
+    "ALA A - VASCULAR",
+    "ALA B - CONVÊNIOS",
+    "ALA C - POSTO CARDIO",
+    "ALA D - ORTOPEDIA II",
+    "ALA E - UVA ENFERMARIA",
+    "ALA F - ORTOPEDIA I",
+    "ALA G - NEUROCIRURGIA",
+    "ALA H - PEDIATRIA",
+    "ALA I",
+    "ALA J",
+    "ALA K",
+    "ALA U - UTI GERAL",
+    "ALA V - UTI CARDIO",
+    "ALA W - UVA",
+    "ALA X - UTI (10 LEITOS)",
+    "ALA Y - UTI (20 LEITOS)",
+    "ALMOXARIFADO",
+    "AMBULATORIO GERAL",
+    "ANGIOCOR",
+    "BOMBA DE INFUSÃO",
+    "BUCO-MAXILO",
+    "CENTRAL DE ABASTECIMENTO FARMACÊUTICO",
+    "CENTRAL DE MATERIAIS E ESTERILIZAÇÃO",
+    "CENTRO CIRURGICO",
+    "CENTRO CIRURGICO CARDIO",
+    "CENTRO CIRURGICO GERAL",
+    "CODIGO LARANJA - BOLSA",
+    "COMPLEXO TÉCNICO E CIENTÍFICO",
+    "DIAVERUM ASSISTENCIA MÉDICA E NEFROLOGICA LTDA",
+    "ENGENHARIA CLÍNICA",
+    "EQUIPAMENTO EM MANUTENÇÃO",
+    "EQUIPAMENTO EM PROCESSO DE INVENTÁRIO",
+    "EQUIPAMENTO NOVO",
+    "FARMACIA",
+    "FISIOTERAPIA",
+    "GAVETA 01",
+    "GAVETA 02",
+    "GAVETA 03",
+    "HEMOTERAPIA",
+    "HIGIENE E LIMPEZA",
+    "HOTELARIA",
+    "LABORATÓRIO",
+    "NEA",
+    "NEWDATA",
+    "NUCLEO ESTRATEGICO",
+    "NUTRIÇÃO",
+    "NÚCLEO DE EDUCAÇÃO PERMANENTE (NEP)",
+    "OBRAS",
+    "OPME",
+    "PEQUENOS PROCEDIMENTOS",
+    "RAIO-X",
+    "RECEPÇÃO HISTORICA",
+    "REDE ONCOBRASIL",
+    "SALA DE EEG",
+    "SALA DE PRÉ OPERATÓRIO",
+    "SALA DE RECUPERAÇÃO PÓS ANESTÉSICO",
+    "SESMT",
+    "SETOR DE INFORMATICA (TI)",
+    "TOMOGRAFO",
+    "UDI",
+    "UDI - CONSULTÓRIO 1",
+    "UNIDADE DE DIAGNOSTICO POR IMAGEM",
+    "UNIDADE MÓVEL",
+    "URGÊNCIA ONCOLÓGICA",
+    "URGÊNCIA ORTOPÉDICA",
+    "UROLOGIA",
+    "UTI Z - PEDIATRIA"
+  ];
+
+  var USGS = [
+    { id: 'z60', nome: "Usg Z60 (Novo)" },
+    { id: 'z6l', nome: "Usg Z6 (Com sonda Linear)" },
+    { id: 'z6', nome: "Usg Z6" }
+  ];
+
+  /* Sugestões iniciais. O app aprende novas a cada plantão copiado ou encerrado. */
+  var SEEDS = {
+    ocorr: [
+      'Sem ocorrências no plantão',
+      'Equipamento enviado para manutenção',
+      'Equipamento substituído por reserva',
+      'Chamado atendido e resolvido',
+      'Aguardando peça de reposição',
+      'Queda de rede em equipamento de imagem'
+    ],
+    pend: [
+      'Acompanhar chamado em aberto',
+      'Aguardando retorno do fornecedor',
+      'Aguardando chegada de peça',
+      'Conferir equipamento após manutenção',
+      'Retirar equipamento para manutenção preventiva'
+    ]
+  };
+
+  function uid() { return Math.random().toString(36).slice(2, 8); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function isoFrom(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function ontem() { var d = new Date(); d.setDate(d.getDate() - 1); return isoFrom(d); }
+  function fmtDate(iso) { var p = (iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+  function blankShift() {
+    var usg = {}; USGS.forEach(function (u) { usg[u.id] = ''; });
+    return { data: ontem(), resp: 'Ericson', assume: '', ocorr: [], pend: [], usg: usg, obs: '' };
+  }
+  function fixShift(o) {
+    var b = blankShift();
+    Object.keys(b).forEach(function (k) { if (o[k] === undefined) o[k] = b[k]; });
+    USGS.forEach(function (u) { if (typeof o.usg[u.id] !== 'string') o.usg[u.id] = ''; });
+    return o;
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY); if (!raw) return null;
+      var o = JSON.parse(raw);
+      o.cur = fixShift(o.cur || {});
+      o.hist = Array.isArray(o.hist) ? o.hist : [];
+      o.sug = o.sug || { ocorr: [], pend: [] };
+      o.sug.ocorr = o.sug.ocorr || []; o.sug.pend = o.sug.pend || [];
+      return o;
+    } catch (e) { return null; }
+  }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+
+  var store = load() || { cur: blankShift(), hist: [], sug: { ocorr: [], pend: [] } };
+  var state = store.cur;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function clean(sh, list) {
+    return sh[list].map(function (i) { return { t: i.t.trim(), s: i.s }; }).filter(function (i) { return i.t; });
+  }
+  function bulletLines(sh, list) {
+    var out = [], items = clean(sh, list);
+    if (!items.length) return ['* '];
+    items.forEach(function (i) {
+      var lines = i.t.split('\n');
+      lines[0] = (i.s ? i.s + ' – ' : '') + lines[0];
+      lines.forEach(function (ln, k) { out.push(k === 0 ? '* ' + ln : '  ' + ln); });
+    });
+    return out;
+  }
+  function buildText(sh) {
+    var L = [];
+    L.push('Passagem de Plantão – ' + fmtDate(sh.data) + ' [19:00 - 07:00]');
+    L.push('Responsável pelo plantão: ' + sh.resp.trim());
+    L.push('');
+    L.push('Responsável que assume o plantão: ' + sh.assume.trim());
+    L.push('');
+    L.push('✅ Ocorrências do plantão anterior:');
+    L.push('');
+    L = L.concat(bulletLines(sh, 'ocorr'));
+    L.push(''); L.push('');
+    L.push("Localização dos USG's");
+    L.push('');
+    USGS.forEach(function (u) { L.push(u.nome + ' - ' + (sh.usg[u.id] || '').trim()); });
+    L.push(''); L.push(''); L.push('');
+    L.push('🧾 Pendências a serem resolvidas:');
+    L.push('');
+    L = L.concat(bulletLines(sh, 'pend'));
+    L.push(''); L.push(''); L.push('');
+    L.push('📌 Observações importantes:');
+    if (sh.obs.trim()) L.push(sh.obs.trim());
+    return L.join('\n');
+  }
+  function hasContent(sh) {
+    return clean(sh, 'ocorr').length || clean(sh, 'pend').length || sh.obs.trim() || sh.assume.trim() ||
+      USGS.some(function (u) { return (sh.usg[u.id] || '').trim(); });
+  }
+
+  /* ---------- sugestões ---------- */
+  function learn(sh) {
+    ['ocorr', 'pend'].forEach(function (list) {
+      clean(sh, list).forEach(function (i) {
+        var t = i.t.split('\n')[0].trim();
+        if (t.length < 3 || t.length > 140) return;
+        var arr = store.sug[list], k = norm(t), f = null;
+        for (var x = 0; x < arr.length; x++) if (norm(arr[x].t) === k) { f = arr[x]; break; }
+        if (f) { f.n++; f.last = Date.now(); } else arr.push({ t: t, n: 1, last: Date.now() });
+      });
+      store.sug[list].sort(function (a, b) { return b.n - a.n || b.last - a.last; });
+      store.sug[list] = store.sug[list].slice(0, 200);
+    });
+  }
+  function suggestionsFor(list, q) {
+    var seen = {}, out = [], nq = norm(q.trim());
+    var pool = store.sug[list].map(function (s) { return s.t; }).concat(SEEDS[list]);
+    pool.forEach(function (t) {
+      var k = norm(t);
+      if (seen[k] || k === nq) return;
+      if (nq && k.indexOf(nq) === -1) return;
+      seen[k] = 1; out.push(t);
+    });
+    return out.slice(0, 6);
+  }
+  var sugEl = $('sug'), sugTa = null, sugList = null;
+  function hideSug() { sugEl.hidden = true; sugTa = null; }
+  function showSug(ta, list) {
+    var items = suggestionsFor(list, ta.value);
+    if (!items.length) { hideSug(); return; }
+    sugTa = ta; sugList = list;
+    sugEl.innerHTML = '<small>Sugestões</small>' + items.map(function (t) { return '<button type="button">' + esc(t) + '</button>'; }).join('');
+    sugEl.hidden = false;
+    var r = ta.getBoundingClientRect(), h = Math.min(sugEl.offsetHeight, 220);
+    var below = window.innerHeight - r.bottom - 90;
+    sugEl.style.left = r.left + 'px'; sugEl.style.width = r.width + 'px';
+    if (below >= h || below >= r.top) { sugEl.style.top = (r.bottom + 4) + 'px'; sugEl.style.bottom = 'auto'; sugEl.style.maxHeight = Math.max(120, Math.min(220, below)) + 'px'; }
+    else { sugEl.style.bottom = (window.innerHeight - r.top + 4) + 'px'; sugEl.style.top = 'auto'; sugEl.style.maxHeight = Math.max(120, Math.min(220, r.top - 12)) + 'px'; }
+  }
+  sugEl.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    var b = e.target.closest('button'); if (!b || !sugTa) return;
+    var ta = sugTa, list = sugList;
+    ta.value = b.textContent;
+    var f = findItem(list, ta.closest('.item').dataset.id);
+    if (f) f.it.t = ta.value;
+    grow(ta); hideSug(); updateOutput(); ta.focus();
+  });
+  window.addEventListener('scroll', function () { if (!sugEl.hidden) hideSug(); }, { passive: true });
+  window.addEventListener('resize', hideSug);
+
+  /* ---------- renderização ---------- */
+  function grow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; }
+  function growAll() { document.querySelectorAll('#view-fill textarea').forEach(grow); }
+
+  function itemHTML(it) {
+    var opts = '<option value="">Setor (opcional)</option>' + SETORES.map(function (s) {
+      return '<option' + (s === it.s ? ' selected' : '') + '>' + esc(s) + '</option>';
+    }).join('');
+    return '<li class="item" data-id="' + it.id + '">' +
+      '<textarea rows="1" data-act="text" placeholder="Descreva o item" aria-label="Item">' + esc(it.t) + '</textarea>' +
+      '<div class="item-actions"><select data-act="setor" aria-label="Setor">' + opts + '</select>' +
+      '<button type="button" class="mini" data-act="rm">Remover</button></div></li>';
+  }
+  function renderList(list) { $('list-' + list).innerHTML = state[list].map(itemHTML).join(''); }
+  function renderUsg() {
+    $('usgBox').innerHTML = USGS.map(function (u) {
+      return '<div class="usg-row"><div class="usg-name">' + esc(u.nome) + '</div>' +
+        '<input type="text" list="dlSetores" data-usg="' + u.id + '" value="' + esc(state.usg[u.id]) + '" placeholder="Local" aria-label="Local do ' + esc(u.nome) + '" autocomplete="off"></div>';
+    }).join('');
+    $('dlSetores').innerHTML = SETORES.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
+  }
+  function renderAll() {
+    $('fData').value = state.data; $('fResp').value = state.resp; $('fAssume').value = state.assume; $('fObs').value = state.obs;
+    renderList('ocorr'); renderList('pend'); renderUsg(); growAll(); updateOutput();
+  }
+  function updateOutput() {
+    var text = buildText(state);
+    $('bubble').textContent = text;
+    var n = clean(state, 'ocorr').length + clean(state, 'pend').length;
+    $('statItems').textContent = n + (n === 1 ? ' item' : ' itens');
+    $('statChars').textContent = text.length + ' caracteres';
+    $('btnWa').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+    ['ocorr', 'pend'].forEach(function (l) { var el = document.querySelector('[data-count="' + l + '"]'); if (el) el.textContent = clean(state, l).length; });
+    persist();
+  }
+
+  /* ---------- histórico ---------- */
+  function archive() {
+    if (!hasContent(state)) return false;
+    var snap = JSON.parse(JSON.stringify(state));
+    var rec = { id: uid(), data: snap.data, savedAt: Date.now(), shift: snap, text: buildText(snap) };
+    store.hist = store.hist.filter(function (h) { return h.data !== rec.data; });
+    store.hist.unshift(rec);
+    store.hist.sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : b.savedAt - a.savedAt; });
+    store.hist = store.hist.slice(0, HIST_MAX);
+    learn(snap);
+    persist();
+    return true;
+  }
+  var openHist = null, armedDel = null, armedDelT;
+  function renderHist() {
+    var box = $('histList');
+    if (!store.hist.length) {
+      box.innerHTML = '<div class="empty">Nenhum plantão salvo ainda.<br>O plantão é salvo ao copiar a mensagem ou ao tocar em Novo plantão.</div>';
+      return;
+    }
+    box.innerHTML = store.hist.map(function (h) {
+      var sh = h.shift, no = clean(sh, 'ocorr').length, np = clean(sh, 'pend').length;
+      var open = openHist === h.id;
+      return '<section class="card hist" data-hid="' + h.id + '">' +
+        '<div class="hist-h"><span class="hist-d">' + esc(fmtDate(h.data)) + '</span><span class="hist-m">' + no + ' ocorr. · ' + np + ' pend.</span></div>' +
+        (open ? '<div class="chat hist-body"><div class="bubble">' + esc(h.text) + '</div></div>'
+              : '<div class="hist-sum">' + esc(clean(sh, 'ocorr').slice(0, 2).map(function (i) { return i.t.split('\n')[0]; }).join(' · ') || 'Sem ocorrências registradas') + '</div>') +
+        '<div class="hist-acts">' +
+        '<button type="button" class="btn small" data-h="toggle">' + (open ? 'Fechar' : 'Ver') + '</button>' +
+        '<button type="button" class="btn small" data-h="copy">Copiar</button>' +
+        '<button type="button" class="btn small" data-h="base">Usar como base</button>' +
+        '<button type="button" class="btn small' + (armedDel === h.id ? ' armed' : '') + '" data-h="del">' + (armedDel === h.id ? 'Confirmar' : 'Excluir') + '</button>' +
+        '</div></section>';
+    }).join('');
+  }
+  $('histList').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-h]'); if (!b) return;
+    var id = b.closest('[data-hid]').dataset.hid, act = b.dataset.h, h = null;
+    store.hist.forEach(function (x) { if (x.id === id) h = x; });
+    if (!h) return;
+    if (act === 'toggle') { openHist = openHist === id ? null : id; renderHist(); }
+    else if (act === 'copy') { copyText(h.text); }
+    else if (act === 'base') {
+      archive();
+      var nw = blankShift(), sh = h.shift;
+      nw.resp = sh.resp; nw.usg = JSON.parse(JSON.stringify(sh.usg));
+      nw.pend = clean(sh, 'pend').map(function (i) { return { id: uid(), t: i.t, s: i.s }; });
+      store.cur = state = nw; renderAll(); switchTab('fill');
+      toast('Pendências e USGs trazidos do plantão anterior');
+    }
+    else if (act === 'del') {
+      if (armedDel !== id) { armedDel = id; clearTimeout(armedDelT); armedDelT = setTimeout(function () { armedDel = null; renderHist(); }, 3500); renderHist(); return; }
+      store.hist = store.hist.filter(function (x) { return x.id !== id; });
+      armedDel = null; persist(); renderHist(); toast('Plantão excluído');
+    }
+  });
+
+  /* ---------- eventos do formulário ---------- */
+  $('fData').addEventListener('input', function (e) { state.data = e.target.value; updateOutput(); });
+  $('fResp').addEventListener('input', function (e) { state.resp = e.target.value; updateOutput(); });
+  $('fAssume').addEventListener('input', function (e) { state.assume = e.target.value; updateOutput(); });
+  $('fObs').addEventListener('input', function (e) { state.obs = e.target.value; grow(e.target); updateOutput(); });
+  $('usgBox').addEventListener('input', function (e) {
+    var id = e.target.dataset.usg; if (!id) return;
+    state.usg[id] = e.target.value; updateOutput();
+  });
+
+  function findItem(list, id) {
+    var a = state[list];
+    for (var i = 0; i < a.length; i++) if (a[i].id === id) return { a: a, i: i, it: a[i] };
+    return null;
+  }
+  ['ocorr', 'pend'].forEach(function (list) {
+    var ul = $('list-' + list);
+    ul.addEventListener('input', function (e) {
+      var ta = e.target.closest('textarea'); if (!ta) return;
+      var f = findItem(list, ta.closest('.item').dataset.id);
+      if (f) f.it.t = ta.value;
+      grow(ta); updateOutput(); showSug(ta, list);
+    });
+    ul.addEventListener('focusin', function (e) {
+      var ta = e.target.closest('textarea'); if (ta) showSug(ta, list);
+    });
+    ul.addEventListener('focusout', function (e) { if (e.target.closest('textarea')) setTimeout(function () { if (document.activeElement !== sugTa) hideSug(); }, 120); });
+    ul.addEventListener('change', function (e) {
+      var sel = e.target.closest('select'); if (!sel) return;
+      var f = findItem(list, sel.closest('.item').dataset.id);
+      if (f) f.it.s = sel.value;
+      updateOutput();
+    });
+    ul.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act="rm"]'); if (!b) return;
+      var f = findItem(list, b.closest('.item').dataset.id);
+      if (f) { f.a.splice(f.i, 1); hideSug(); renderList(list); growAll(); updateOutput(); }
+    });
+  });
+  document.querySelectorAll('[data-add]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var list = b.dataset.add;
+      state[list].push({ id: uid(), t: '', s: '' });
+      renderList(list);
+      var tas = $('list-' + list).querySelectorAll('textarea');
+      if (tas.length) tas[tas.length - 1].focus();
+      updateOutput();
+    });
+  });
+
+  function switchTab(name) {
+    hideSug();
+    ['fill', 'msg', 'hist'].forEach(function (t) {
+      $('view-' + t).hidden = t !== name;
+      $('tab-' + t).setAttribute('aria-selected', t === name ? 'true' : 'false');
+    });
+    window.scrollTo(0, 0);
+    if (name === 'fill') growAll();
+    if (name === 'hist') renderHist();
+  }
+  document.querySelectorAll('.tab').forEach(function (b) { b.addEventListener('click', function () { switchTab(b.dataset.tab); }); });
+
+  var toastT;
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 2400);
+  }
+  function copyFallback(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove(); return ok;
+  }
+  function copyText(text, after) {
+    var done = function () { toast('Mensagem copiada'); if (after) after(); };
+    var fail = function () { if (copyFallback(text)) done(); else toast('Não foi possível copiar'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
+  }
+  $('btnCopy').addEventListener('click', function () { copyText(buildText(state), archive); });
+  $('btnWa').addEventListener('click', function () { archive(); });
+
+  var armed = false, armT, btnNew = $('btnNew');
+  function disarm() { armed = false; clearTimeout(armT); btnNew.textContent = 'Novo plantão'; btnNew.classList.remove('armed'); }
+  btnNew.addEventListener('click', function () {
+    if (!armed) { armed = true; btnNew.textContent = 'Toque de novo para limpar'; btnNew.classList.add('armed'); armT = setTimeout(disarm, 3500); return; }
+    disarm();
+    var saved = archive();
+    store.cur = state = blankShift(); renderAll(); switchTab('fill');
+    toast(saved ? 'Plantão salvo no histórico' : 'Plantão em branco');
+  });
+
+  if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) {} }
+  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
